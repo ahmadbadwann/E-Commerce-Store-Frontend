@@ -72,7 +72,7 @@ const OrderSummary = () => {
 
 			// 3. Open WhatsApp
 			const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${message}`;
-			window.open(url, "_blank");
+			window.location.href = url;
 
 			// 4. Clear the cart and reset form
 			await clearCart();
