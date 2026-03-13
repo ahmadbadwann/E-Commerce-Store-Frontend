@@ -17,13 +17,16 @@ export const useUserStore = create((set, get) => ({
 
 		try {
 			const res = await axios.post("/auth/signup", { name, email, password });
-			// Save tokens to localStorage so they persist on mobile
 			localStorage.setItem("accessToken", res.data.accessToken);
 			localStorage.setItem("refreshToken", res.data.refreshToken);
 			set({ user: res.data, loading: false });
 		} catch (error) {
 			set({ loading: false });
-			toast.error(error.response?.data?.message || "An error occurred");
+			const message =
+				error.code === "ECONNABORTED"
+					? "Request timed out. Please try again."
+					: error.response?.data?.message || "An error occurred";
+			toast.error(message);
 		}
 	},
 
@@ -32,13 +35,16 @@ export const useUserStore = create((set, get) => ({
 
 		try {
 			const res = await axios.post("/auth/login", { email, password });
-			// Save tokens to localStorage so they persist on mobile
 			localStorage.setItem("accessToken", res.data.accessToken);
 			localStorage.setItem("refreshToken", res.data.refreshToken);
 			set({ user: res.data, loading: false });
 		} catch (error) {
 			set({ loading: false });
-			toast.error(error.response?.data?.message || "An error occurred");
+			const message =
+				error.code === "ECONNABORTED"
+					? "Request timed out. Please try again."
+					: error.response?.data?.message || "An error occurred";
+			toast.error(message);
 		}
 	},
 
@@ -46,11 +52,12 @@ export const useUserStore = create((set, get) => ({
 		try {
 			const refreshToken = localStorage.getItem("refreshToken");
 			await axios.post("/auth/logout", { refreshToken });
+		} catch (error) {
+			console.log("Logout error:", error.message);
+		} finally {
 			localStorage.removeItem("accessToken");
 			localStorage.removeItem("refreshToken");
 			set({ user: null });
-		} catch (error) {
-			toast.error(error.response?.data?.message || "An error occurred during logout");
 		}
 	},
 
@@ -65,7 +72,6 @@ export const useUserStore = create((set, get) => ({
 			const response = await axios.get("/auth/profile");
 			set({ user: response.data, checkingAuth: false });
 		} catch (error) {
-			// Try refreshing if 401
 			if (error.response?.status === 401) {
 				try {
 					await get().refreshToken();
@@ -111,17 +117,14 @@ axios.interceptors.response.use(
 		const originalRequest = error.config;
 		if (error.response?.status === 401 && !originalRequest._retry) {
 			originalRequest._retry = true;
-
 			try {
 				if (refreshPromise) {
 					await refreshPromise;
 					return axios(originalRequest);
 				}
-
 				refreshPromise = useUserStore.getState().refreshToken();
 				await refreshPromise;
 				refreshPromise = null;
-
 				return axios(originalRequest);
 			} catch (refreshError) {
 				useUserStore.getState().logout();
