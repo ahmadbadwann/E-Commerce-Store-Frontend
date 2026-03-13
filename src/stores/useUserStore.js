@@ -17,28 +17,37 @@ export const useUserStore = create((set, get) => ({
 
 		try {
 			const res = await axios.post("/auth/signup", { name, email, password });
+			// Save tokens to localStorage so they persist on mobile
+			localStorage.setItem("accessToken", res.data.accessToken);
+			localStorage.setItem("refreshToken", res.data.refreshToken);
 			set({ user: res.data, loading: false });
 		} catch (error) {
 			set({ loading: false });
-			toast.error(error.response.data.message || "An error occurred");
+			toast.error(error.response?.data?.message || "An error occurred");
 		}
 	},
+
 	login: async (email, password) => {
 		set({ loading: true });
 
 		try {
 			const res = await axios.post("/auth/login", { email, password });
-
+			// Save tokens to localStorage so they persist on mobile
+			localStorage.setItem("accessToken", res.data.accessToken);
+			localStorage.setItem("refreshToken", res.data.refreshToken);
 			set({ user: res.data, loading: false });
 		} catch (error) {
 			set({ loading: false });
-			toast.error(error.response.data.message || "An error occurred");
+			toast.error(error.response?.data?.message || "An error occurred");
 		}
 	},
 
 	logout: async () => {
 		try {
-			await axios.post("/auth/logout");
+			const refreshToken = localStorage.getItem("refreshToken");
+			await axios.post("/auth/logout", { refreshToken });
+			localStorage.removeItem("accessToken");
+			localStorage.removeItem("refreshToken");
 			set({ user: null });
 		} catch (error) {
 			toast.error(error.response?.data?.message || "An error occurred during logout");
@@ -47,34 +56,53 @@ export const useUserStore = create((set, get) => ({
 
 	checkAuth: async () => {
 		set({ checkingAuth: true });
+		const token = localStorage.getItem("accessToken");
+		if (!token) {
+			set({ checkingAuth: false, user: null });
+			return;
+		}
 		try {
 			const response = await axios.get("/auth/profile");
 			set({ user: response.data, checkingAuth: false });
 		} catch (error) {
-			console.log(error.message);
-			set({ checkingAuth: false, user: null });
+			// Try refreshing if 401
+			if (error.response?.status === 401) {
+				try {
+					await get().refreshToken();
+					const response = await axios.get("/auth/profile");
+					set({ user: response.data, checkingAuth: false });
+				} catch {
+					localStorage.removeItem("accessToken");
+					localStorage.removeItem("refreshToken");
+					set({ checkingAuth: false, user: null });
+				}
+			} else {
+				set({ checkingAuth: false, user: null });
+			}
 		}
 	},
 
 	refreshToken: async () => {
-		// Prevent multiple simultaneous refresh attempts
 		if (get().checkingAuth) return;
-
 		set({ checkingAuth: true });
 		try {
-			const response = await axios.post("/auth/refresh-token");
+			const token = localStorage.getItem("refreshToken");
+			if (!token) throw new Error("No refresh token");
+
+			const response = await axios.post("/auth/refresh-token", { refreshToken: token });
+			localStorage.setItem("accessToken", response.data.accessToken);
 			set({ checkingAuth: false });
 			return response.data;
 		} catch (error) {
+			localStorage.removeItem("accessToken");
+			localStorage.removeItem("refreshToken");
 			set({ user: null, checkingAuth: false });
 			throw error;
 		}
 	},
 }));
 
-// TODO: Implement the axios interceptors for refreshing access token
-
-// Axios interceptor for token refresh
+// Axios interceptor for automatic token refresh on 401
 let refreshPromise = null;
 
 axios.interceptors.response.use(
@@ -85,20 +113,17 @@ axios.interceptors.response.use(
 			originalRequest._retry = true;
 
 			try {
-				// If a refresh is already in progress, wait for it to complete
 				if (refreshPromise) {
 					await refreshPromise;
 					return axios(originalRequest);
 				}
 
-				// Start a new refresh process
 				refreshPromise = useUserStore.getState().refreshToken();
 				await refreshPromise;
 				refreshPromise = null;
 
 				return axios(originalRequest);
 			} catch (refreshError) {
-				// If refresh fails, redirect to login or handle as needed
 				useUserStore.getState().logout();
 				return Promise.reject(refreshError);
 			}
