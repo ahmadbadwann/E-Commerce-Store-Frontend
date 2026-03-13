@@ -2,12 +2,16 @@ import { create } from "zustand";
 import axios from "../lib/axios";
 import { toast } from "react-hot-toast";
 
+// Debounce map to track pending requests per product
+const pendingRequests = new Map();
+
 export const useCartStore = create((set, get) => ({
 	cart: [],
 	coupon: null,
 	total: 0,
 	subtotal: 0,
 	isCouponApplied: false,
+	loadingItems: {}, // tracks which productIds are being added
 
 	getMyCoupon: async () => {
 		try {
@@ -46,25 +50,68 @@ export const useCartStore = create((set, get) => ({
 	clearCart: async () => {
 		set({ cart: [], coupon: null, total: 0, subtotal: 0 });
 	},
-	addToCart: async (product) => {
-		try {
-			await axios.post("/cart", { productId: product._id });
-			toast.success("Product added to cart");
 
-			set((prevState) => {
-				const existingItem = prevState.cart.find((item) => item._id === product._id);
-				const newCart = existingItem
-					? prevState.cart.map((item) =>
-							item._id === product._id ? { ...item, quantity: item.quantity + 1 } : item
-					  )
-					: [...prevState.cart, { ...product, quantity: 1 }];
-				return { cart: newCart };
-			});
-			get().calculateTotals();
-		} catch (error) {
-			toast.error(error.response.data.message || "An error occurred");
+	addToCart: async (product) => {
+		const productId = product._id;
+
+		// If already loading this product, ignore the click
+		if (get().loadingItems[productId]) return;
+
+		// If there's a pending debounce for this product, clear it
+		if (pendingRequests.has(productId)) {
+			clearTimeout(pendingRequests.get(productId));
 		}
+
+		// Mark as loading immediately
+		set((state) => ({
+			loadingItems: { ...state.loadingItems, [productId]: true },
+		}));
+
+		// Optimistically update UI right away
+		set((prevState) => {
+			const existingItem = prevState.cart.find((item) => item._id === productId);
+			const newCart = existingItem
+				? prevState.cart.map((item) =>
+						item._id === productId ? { ...item, quantity: item.quantity + 1 } : item
+				  )
+				: [...prevState.cart, { ...product, quantity: 1 }];
+			return { cart: newCart };
+		});
+		get().calculateTotals();
+
+		// Debounce the actual API call by 400ms
+		const timeoutId = setTimeout(async () => {
+			try {
+				await axios.post("/cart", { productId });
+				toast.success("Product added to cart");
+			} catch (error) {
+				// Revert optimistic update on failure
+				set((prevState) => {
+					const existingItem = prevState.cart.find((item) => item._id === productId);
+					if (!existingItem) return prevState;
+					const newCart =
+						existingItem.quantity <= 1
+							? prevState.cart.filter((item) => item._id !== productId)
+							: prevState.cart.map((item) =>
+									item._id === productId ? { ...item, quantity: item.quantity - 1 } : item
+							  );
+					return { cart: newCart };
+				});
+				get().calculateTotals();
+				toast.error(error.response?.data?.message || "An error occurred");
+			} finally {
+				set((state) => {
+					const updated = { ...state.loadingItems };
+					delete updated[productId];
+					return { loadingItems: updated };
+				});
+				pendingRequests.delete(productId);
+			}
+		}, 400);
+
+		pendingRequests.set(productId, timeoutId);
 	},
+
 	removeFromCart: async (productId) => {
 		await axios.delete(`/cart`, { data: { productId } });
 		set((prevState) => ({ cart: prevState.cart.filter((item) => item._id !== productId) }));
@@ -75,7 +122,6 @@ export const useCartStore = create((set, get) => ({
 			get().removeFromCart(productId);
 			return;
 		}
-
 		await axios.put(`/cart/${productId}`, { quantity });
 		set((prevState) => ({
 			cart: prevState.cart.map((item) => (item._id === productId ? { ...item, quantity } : item)),
@@ -86,13 +132,10 @@ export const useCartStore = create((set, get) => ({
 		const { cart, coupon, isCouponApplied } = get();
 		const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 		let total = subtotal;
-
-		// Only apply discount when coupon has been explicitly applied by the user
 		if (coupon && isCouponApplied) {
 			const discount = subtotal * (coupon.discountPercentage / 100);
 			total = subtotal - discount;
 		}
-
 		set({ subtotal, total });
 	},
 }));

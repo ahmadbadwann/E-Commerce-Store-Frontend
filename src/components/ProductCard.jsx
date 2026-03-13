@@ -1,20 +1,21 @@
 import toast from "react-hot-toast";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Loader } from "lucide-react";
 import { useUserStore } from "../stores/useUserStore";
 import { useCartStore } from "../stores/useCartStore";
 import { Link } from "react-router-dom";
 
 const ProductCard = ({ product }) => {
 	const { user } = useUserStore();
-	const { addToCart } = useCartStore();
+	const { addToCart, loadingItems } = useCartStore();
+	const isLoading = loadingItems[product._id];
+
 	const handleAddToCart = (e) => {
-		e.preventDefault(); // prevent navigating when clicking the button
+		e.preventDefault();
 		if (!user) {
 			toast.error("Please login to add products to cart", { id: "login" });
 			return;
-		} else {
-			addToCart(product);
 		}
+		addToCart(product);
 	};
 
 	return (
@@ -33,11 +34,15 @@ const ProductCard = ({ product }) => {
 				</div>
 				<button
 					className='flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-center text-sm font-medium
-					 text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-300'
+					text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-300
+					disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200'
 					onClick={handleAddToCart}
+					disabled={isLoading}
 				>
-					<ShoppingCart size={22} className='mr-2' />
-					Add to cart
+					{isLoading
+						? <><Loader size={22} className='mr-2 animate-spin' /> Adding...</>
+						: <><ShoppingCart size={22} className='mr-2' /> Add to cart</>
+					}
 				</button>
 			</div>
 		</Link>
