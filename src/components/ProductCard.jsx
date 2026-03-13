@@ -2,22 +2,23 @@ import toast from "react-hot-toast";
 import { ShoppingCart } from "lucide-react";
 import { useUserStore } from "../stores/useUserStore";
 import { useCartStore } from "../stores/useCartStore";
+import { Link } from "react-router-dom";
 
 const ProductCard = ({ product }) => {
 	const { user } = useUserStore();
 	const { addToCart } = useCartStore();
-	const handleAddToCart = () => {
+	const handleAddToCart = (e) => {
+		e.preventDefault(); // prevent navigating when clicking the button
 		if (!user) {
 			toast.error("Please login to add products to cart", { id: "login" });
 			return;
 		} else {
-			// add to cart
 			addToCart(product);
 		}
 	};
 
 	return (
-		<div className='flex w-full relative flex-col overflow-hidden rounded-lg border border-gray-700 shadow-lg'>
+		<Link to={`/product/${product._id}`} className='flex w-full relative flex-col overflow-hidden rounded-lg border border-gray-700 shadow-lg hover:border-emerald-500/50 transition-colors duration-200'>
 			<div className='relative mx-3 mt-3 flex overflow-hidden rounded-xl bg-gray-800'>
 				<img className='object-contain w-full h-60' src={product.image} alt='product image' />
 				<div className='absolute inset-0 bg-black bg-opacity-20' />
@@ -39,7 +40,7 @@ const ProductCard = ({ product }) => {
 					Add to cart
 				</button>
 			</div>
-		</div>
+		</Link>
 	);
 };
 export default ProductCard;
