@@ -1,4 +1,4 @@
-import { BarChart, PlusCircle, ShoppingBasket, ClipboardList, LayoutGrid, Tag } from "lucide-react";
+import { BarChart, PlusCircle, ShoppingBasket, ClipboardList, LayoutGrid, Tag, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
@@ -8,6 +8,7 @@ import ProductsList from "../components/ProductsList";
 import AdminOrders from "../components/AdminOrders";
 import AdminCategories from "../components/AdminCategories";
 import AdminCoupons from "../components/AdminCoupons";
+import AdminUsers from "../components/AdminUsers";
 import { useProductStore } from "../stores/useProductStore";
 
 const tabs = [
@@ -15,6 +16,7 @@ const tabs = [
 	{ id: "products", label: "Products", icon: ShoppingBasket },
 	{ id: "analytics", label: "Analytics", icon: BarChart },
 	{ id: "orders", label: "Orders", icon: ClipboardList },
+	{ id: "users", label: "Users", icon: Users },
 	{ id: "categories", label: "Categories", icon: LayoutGrid },
 	{ id: "coupons", label: "Coupons", icon: Tag },
 ];
@@ -60,6 +62,7 @@ const AdminPage = () => {
 				{activeTab === "products" && <ProductsList />}
 				{activeTab === "analytics" && <AnalyticsTab />}
 				{activeTab === "orders" && <AdminOrders />}
+				{activeTab === "users" && <AdminUsers />}
 				{activeTab === "categories" && <AdminCategories />}
 				{activeTab === "coupons" && <AdminCoupons />}
 			</div>
